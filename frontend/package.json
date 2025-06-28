@@ -10,14 +10,18 @@
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "support:dev": "cd src/support && npm run dev",
+    "support:start": "cd src/support && npm start",
+    "support:install": "cd src/support && npm install",
+    "dev": "concurrently \"npm run support:dev\" \"npm start\"",
+    "postinstall": "npm run support:install"
   },
   "eslintConfig": {
     "extends": [
@@ -39,7 +43,9 @@
   },
   "devDependencies": {
     "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
     "postcss": "^8.4.31",
+    "react-scripts": "5.0.1",
     "tailwindcss": "^3.3.0"
   }
 }
