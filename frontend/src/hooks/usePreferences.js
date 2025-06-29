@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { apiService } from '../services/api';
 
 export const usePreferences = () => {
@@ -10,51 +10,44 @@ export const usePreferences = () => {
     max_tokens: 2048,
     temperature: 0.7
   });
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Load preferences on mount
-  useEffect(() => {
-    loadPreferences();
-  }, []);
-
-  const loadPreferences = async () => {
+  const loadPreferences = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
       const response = await apiService.getPreferences();
       setPreferences(response.data);
-      setError(null);
     } catch (err) {
-      setError('Failed to load preferences');
       console.error('Error loading preferences:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to load preferences');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const savePreferences = async (newPrefs) => {
+  const savePreferences = useCallback(async (newPreferences) => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      await apiService.updatePreferences(newPrefs);
-      setPreferences(newPrefs);
-      setError(null);
+      const response = await apiService.updatePreferences(newPreferences);
+      setPreferences(response.data);
       return true;
     } catch (err) {
-      setError('Failed to save preferences');
       console.error('Error saving preferences:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to save preferences');
       return false;
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   return {
     preferences,
-    setPreferences,
+    loadPreferences,
     savePreferences,
     loading,
-    error,
-    reload: loadPreferences
+    error
   };
 };
