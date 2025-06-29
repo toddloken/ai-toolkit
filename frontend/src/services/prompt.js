@@ -1,52 +1,3 @@
-const mongoose = require('mongoose');
-
-const promptSchema = new mongoose.Schema({
-    title: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    instructions: {
-        type: String,
-        trim: true
-    },
-    context: {
-        type: String,
-        trim: true
-    },
-    inputData: {
-        type: String,
-        trim: true
-    },
-    outputIndicator: {
-        type: String,
-        trim: true
-    },
-    negativePrompting: {
-        type: String,
-        trim: true
-    },
-    combinedPrompt: {
-        type: String,
-        required: true
-    },
-    response: {
-        type: String,
-        default: ''
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now
-    }
-});
-
-module.exports = mongoose.model('Prompt', promptSchema);
-
-// backend/routes/prompts.js
 const express = require('express');
 const router = express.Router();
 const Prompt = require('../models/Prompt');
@@ -87,7 +38,8 @@ router.post('/save', async (req, res) => {
 
         res.status(201).json({
             message: 'Prompt saved successfully',
-            data: savedPrompt
+            data: savedPrompt,
+            id: savedPrompt._id
         });
     } catch (error) {
         console.error('Error saving prompt:', error);
@@ -102,7 +54,7 @@ router.get('/', async (req, res) => {
     try {
         const prompts = await Prompt.find()
             .sort({ createdAt: -1 })
-            .limit(50); // Limit to last 50 prompts
+            .limit(50);
 
         res.json({
             data: prompts
@@ -137,34 +89,105 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-module.exports = router;
+// Update existing prompt by ID
+router.put('/:id', async (req, res) => {
+    try {
+        const {
+            title,
+            instructions,
+            context,
+            inputData,
+            outputIndicator,
+            negativePrompting,
+            combinedPrompt,
+            response
+        } = req.body;
 
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-require('dotenv').config();
+        // Validation
+        if (!title || !combinedPrompt) {
+            return res.status(400).json({
+                error: 'Title and combined prompt are required'
+            });
+        }
 
-const app = express();
+        const updatedPrompt = await Prompt.findByIdAndUpdate(
+            req.params.id,
+            {
+                title,
+                instructions,
+                context,
+                inputData,
+                outputIndicator,
+                negativePrompting,
+                combinedPrompt,
+                response,
+                updatedAt: Date.now()
+            },
+            {
+                new: true,
+                runValidators: true
+            }
+        );
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+        if (!updatedPrompt) {
+            return res.status(404).json({
+                error: 'Prompt not found'
+            });
+        }
 
-// MongoDB connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-toolkit', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-})
-    .then(() => console.log('Connected to MongoDB database: ai-toolkit'))
-    .catch(err => console.error('MongoDB connection error:', err));
+        res.json({
+            message: 'Prompt updated successfully',
+            data: updatedPrompt
+        });
+    } catch (error) {
+        console.error('Error updating prompt:', error);
 
-// Routes
-app.use('/api/prompts', require('./routes/prompts'));
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({
+                error: 'Validation error: ' + error.message
+            });
+        }
 
-// Your existing API routes
-app.use('/api', require('./routes/api')); // Your existing apiService routes
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                error: 'Invalid prompt ID format'
+            });
+        }
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+        res.status(500).json({
+            error: 'Failed to update prompt'
+        });
+    }
 });
+
+// Delete prompt by ID
+router.delete('/:id', async (req, res) => {
+    try {
+        const deletedPrompt = await Prompt.findByIdAndDelete(req.params.id);
+
+        if (!deletedPrompt) {
+            return res.status(404).json({
+                error: 'Prompt not found'
+            });
+        }
+
+        res.json({
+            message: 'Prompt deleted successfully',
+            data: deletedPrompt
+        });
+    } catch (error) {
+        console.error('Error deleting prompt:', error);
+
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                error: 'Invalid prompt ID format'
+            });
+        }
+
+        res.status(500).json({
+            error: 'Failed to delete prompt'
+        });
+    }
+});
+
+module.exports = router;

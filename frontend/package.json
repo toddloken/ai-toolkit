@@ -21,7 +21,8 @@
     "support:start": "cd src/support && npm start",
     "support:install": "cd src/support && npm install",
     "dev": "concurrently \"npm run support:dev\" \"npm start\"",
-    "postinstall": "npm run support:install"
+    "postinstall": "npm run support:install",
+    "dev:all": "concurrently \"npm run support:dev\" \"npm start\" --names \"SUPPORT,REACT\" --prefix name"
   },
   "eslintConfig": {
     "extends": [

@@ -43,7 +43,7 @@ export const apiService = {
     }
   },
 
-  // New MongoDB operations (port 5000)
+  // MongoDB operations (port 5000)
   savePrompt: async (promptData) => {
     try {
       return await supportApi.post('/prompts/save', promptData);
@@ -53,6 +53,27 @@ export const apiService = {
     }
   },
 
+  // UPDATED: Renamed from getAllPrompts to getPrompts to match component expectation
+  getPrompts: async () => {
+    try {
+      return await supportApi.get('/prompts');
+    } catch (error) {
+      console.error('Error in getPrompts:', error);
+      throw error;
+    }
+  },
+
+  // ADDED: New method for updating existing prompts
+  updatePrompt: async (id, promptData) => {
+    try {
+      return await supportApi.put(`/prompts/${id}`, promptData);
+    } catch (error) {
+      console.error('Error in updatePrompt:', error);
+      throw error;
+    }
+  },
+
+  // Keep the original getAllPrompts for backward compatibility (optional)
   getAllPrompts: async () => {
     try {
       return await supportApi.get('/prompts');

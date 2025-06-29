@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Send, Copy, AlertCircle, Save, HelpCircle } from 'lucide-react';
+import { Send, Copy, AlertCircle, Save, HelpCircle, Upload, Trash2, RefreshCw } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { apiService } from '../services/api';
 
@@ -58,6 +58,14 @@ const SimplePrompt = () => {
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  // New state for load functionality
+  const [savedPrompts, setSavedPrompts] = useState([]);
+  const [selectedPromptId, setSelectedPromptId] = useState('');
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [loadingPrompts, setLoadingPrompts] = useState(false);
+  const [currentPromptId, setCurrentPromptId] = useState(null);
 
   // Update combined prompt whenever form data changes
   useEffect(() => {
@@ -91,6 +99,21 @@ const SimplePrompt = () => {
     setCombinedPrompt(generateCombinedPrompt());
   }, [formData]);
 
+  // Clear messages after 5 seconds
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
@@ -118,6 +141,7 @@ const SimplePrompt = () => {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
+    setSuccessMessage('Copied to clipboard!');
   };
 
   const handleSaveToDatabase = async () => {
@@ -141,13 +165,19 @@ const SimplePrompt = () => {
         response: response
       };
 
-      const result = await apiService.savePrompt(promptData);
+      let result;
+      if (currentPromptId) {
+        // Update existing prompt
+        result = await apiService.updatePrompt(currentPromptId, promptData);
+        setSuccessMessage('Prompt updated successfully!');
+      } else {
+        // Create new prompt
+        result = await apiService.savePrompt(promptData);
+        setCurrentPromptId(result.data.id || result.data._id);
+        setSuccessMessage('Prompt saved successfully!');
+      }
 
-      // Success feedback - you might want to show a success message
       console.log('Prompt saved successfully:', result.data);
-
-      // Optional: Show success message to user
-      alert('Prompt saved successfully to database!');
 
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to save prompt to database');
@@ -157,7 +187,122 @@ const SimplePrompt = () => {
     }
   };
 
+  // Load saved prompts from database
+  const loadSavedPrompts = async () => {
+    setLoadingPrompts(true);
+    setError(null);
 
+    try {
+      const result = await apiService.getPrompts();
+      console.log('API Response:', result); // Debug log
+
+      // Handle different possible response structures
+      let prompts = [];
+      if (result.data && Array.isArray(result.data)) {
+        prompts = result.data;
+      } else if (Array.isArray(result)) {
+        prompts = result;
+      } else if (result.data && result.data.data && Array.isArray(result.data.data)) {
+        prompts = result.data.data;
+      }
+
+      console.log('Processed prompts:', prompts); // Debug log
+      setSavedPrompts(prompts);
+      setShowLoadDialog(true);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to load prompts from database');
+      console.error('Error loading prompts:', err);
+    } finally {
+      setLoadingPrompts(false);
+    }
+  };
+
+  // Load selected prompt
+  const handleLoadPrompt = async () => {
+    if (!selectedPromptId) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const selectedPrompt = savedPrompts.find(p => (p._id || p.id) === selectedPromptId);
+
+      if (selectedPrompt) {
+        setFormData({
+          title: selectedPrompt.title || '',
+          instructions: selectedPrompt.instructions || '',
+          context: selectedPrompt.context || '',
+          inputData: selectedPrompt.inputData || '',
+          outputIndicator: selectedPrompt.outputIndicator || '',
+          negativePrompting: selectedPrompt.negativePrompting || ''
+        });
+        setResponse(selectedPrompt.response || '');
+        setCurrentPromptId(selectedPrompt._id || selectedPrompt.id);
+        setShowLoadDialog(false);
+        setSelectedPromptId('');
+        setSuccessMessage('Prompt loaded successfully!');
+      }
+    } catch (err) {
+      setError('Failed to load selected prompt');
+      console.error('Error loading selected prompt:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete prompt from database
+  const handleDeleteFromDatabase = async () => {
+    if (!currentPromptId) {
+      setError('No prompt is currently loaded to delete');
+      return;
+    }
+
+    const confirmDelete = window.confirm('Are you sure you want to delete this prompt from the database? This action cannot be undone.');
+
+    if (!confirmDelete) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await apiService.deletePrompt(currentPromptId);
+
+      // Clear the form after successful deletion
+      setFormData({
+        title: '',
+        instructions: '',
+        context: '',
+        inputData: '',
+        outputIndicator: '',
+        negativePrompting: ''
+      });
+      setResponse('');
+      setCurrentPromptId(null);
+      setSuccessMessage('Prompt deleted successfully!');
+
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete prompt from database');
+      console.error('Error deleting prompt:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Create new prompt (clear form)
+  const handleNewPrompt = () => {
+    setFormData({
+      title: '',
+      instructions: '',
+      context: '',
+      inputData: '',
+      outputIndicator: '',
+      negativePrompting: ''
+    });
+    setResponse('');
+    setCurrentPromptId(null);
+    setError(null);
+    setSuccessMessage('Form cleared for new prompt!');
+  };
 
   return (
       <div className={`rounded-lg border p-6 ${colors.card}`}>
@@ -170,10 +315,16 @@ const SimplePrompt = () => {
             </div>
         )}
 
+        {successMessage && (
+            <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-lg">
+              {successMessage}
+            </div>
+        )}
+
         <div className="space-y-6">
-          {/* Title Field */}
+          {/* Title Field with status indicator */}
           <InputField
-              label="Title"
+              label={`Title ${currentPromptId ? '(Currently Loaded)' : '(New)'}`}
               tooltip="Title to be saved to MongoDB"
               value={formData.title}
               onChange={(value) => handleInputChange('title', value)}
@@ -258,7 +409,7 @@ const SimplePrompt = () => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <button
                 onClick={handleSubmit}
                 disabled={loading || !combinedPrompt.trim()}
@@ -290,11 +441,101 @@ const SimplePrompt = () => {
               ) : (
                   <>
                     <Save className="w-4 h-4 inline-block mr-2" />
-                    Save to Database
+                    {currentPromptId ? 'Update' : 'Save'} to Database
                   </>
               )}
             </button>
+
+            <button
+                onClick={loadSavedPrompts}
+                disabled={loadingPrompts}
+                className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loadingPrompts ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full inline-block mr-2"></div>
+                    Loading...
+                  </>
+              ) : (
+                  <>
+                    <Upload className="w-4 h-4 inline-block mr-2" />
+                    Load Previous
+                  </>
+              )}
+            </button>
+
+            <button
+                onClick={handleDeleteFromDatabase}
+                disabled={loading || !currentPromptId}
+                className="px-6 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash2 className="w-4 h-4 inline-block mr-2" />
+              Delete from Database
+            </button>
+
+            <button
+                onClick={handleNewPrompt}
+                disabled={loading}
+                className="px-6 py-2 rounded-lg bg-gray-600 hover:bg-gray-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className="w-4 h-4 inline-block mr-2" />
+              New Prompt
+            </button>
           </div>
+
+          {/* Load Dialog */}
+          {showLoadDialog && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className={`bg-white rounded-lg p-6 w-full max-w-md max-h-96 ${colors.card}`}>
+                  <h3 className="text-lg font-semibold mb-4">Load Previous Prompt</h3>
+
+                  <div className="space-y-4 max-h-64 overflow-y-auto">
+                    {!Array.isArray(savedPrompts) || savedPrompts.length === 0 ? (
+                        <p className="text-gray-500">No saved prompts found.</p>
+                    ) : (
+                        savedPrompts.map((prompt) => (
+                            <div
+                                key={prompt._id || prompt.id}
+                                className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-gray-50 ${
+                                    selectedPromptId === (prompt._id || prompt.id)
+                                        ? 'bg-blue-50 border-blue-300'
+                                        : 'border-gray-200'
+                                }`}
+                                onClick={() => setSelectedPromptId(prompt._id || prompt.id)}
+                            >
+                              <div className="font-medium">{prompt.title}</div>
+                              <div className="text-sm text-gray-500 truncate">
+                                {prompt.instructions?.substring(0, 100)}...
+                              </div>
+                              <div className="text-xs text-gray-400 mt-1">
+                                Created: {new Date(prompt.createdAt || prompt.created_at || Date.now()).toLocaleDateString()}
+                              </div>
+                            </div>
+                        ))
+                    )}
+                  </div>
+
+                  <div className="flex justify-end gap-2 mt-4">
+                    <button
+                        onClick={() => {
+                          setShowLoadDialog(false);
+                          setSelectedPromptId('');
+                        }}
+                        className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                        onClick={handleLoadPrompt}
+                        disabled={!selectedPromptId || loading}
+                        className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Load Selected
+                    </button>
+                  </div>
+                </div>
+              </div>
+          )}
 
           {/* Response Output */}
           {response && (

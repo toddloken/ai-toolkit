@@ -44,4 +44,10 @@ const promptSchema = new mongoose.Schema({
     }
 });
 
+// Add pre-save middleware to update the updatedAt field
+promptSchema.pre('save', function(next) {
+    this.updatedAt = Date.now();
+    next();
+});
+
 module.exports = mongoose.model('Prompt', promptSchema);
